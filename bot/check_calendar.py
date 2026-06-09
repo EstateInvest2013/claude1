@@ -84,12 +84,50 @@ def load_events():
                 })
     return events
 
+async def send_monthly_preview(bot):
+    today = date.today()
+    import calendar
+    # Наступний місяць
+    if today.month == 12:
+        next_month, next_year = 1, today.year + 1
+    else:
+        next_month, next_year = today.month + 1, today.year
+
+    events = load_events()
+    found = []
+    for e in events:
+        try:
+            next_event = e['date'].replace(year=next_year, month=next_month)
+        except ValueError:
+            continue
+        if next_event.month == next_month:
+            found.append((next_event, e))
+    found.sort(key=lambda x: x[0])
+
+    month_name = ['', 'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
+                  'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'][next_month]
+
+    if found:
+        lines = [f'📅 Події на {month_name} {next_year}:\n']
+        for d, e in found:
+            lines.append(f"• {d.strftime('%d.%m')} — {e['reason']} — {e['name']}")
+        await bot.send_message(chat_id=GROUP_CHAT_ID, text='\n'.join(lines)[:4000])
+    else:
+        await bot.send_message(chat_id=GROUP_CHAT_ID, text=f'📅 {month_name} {next_year}: подій немає.')
+
 async def main():
+    today = date.today()
     bot = Bot(token=TELEGRAM_TOKEN)
+
+    # Щоденні нагадування
     events = load_events()
     for e in events:
         d = days_until(e['date'])
         if d in [0, 7]:
             await bot.send_message(chat_id=GROUP_CHAT_ID, text=make_message(e, d))
+
+    # 29 або 30 числа — надсилаємо список на наступний місяць
+    if today.day in [29, 30]:
+        await send_monthly_preview(bot)
 
 asyncio.run(main())
