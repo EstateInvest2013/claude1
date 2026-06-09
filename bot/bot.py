@@ -228,39 +228,31 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         wb = openpyxl.load_workbook(DATA_FILE)
         ws = wb.worksheets[0]
-
-        def fmt_date(d):
-            if not d:
-                return None
-            try:
-                return datetime.strptime(str(d), '%d.%m.%Y').date()
-            except:
-                return None
-
-        bd = fmt_date(data.get('birthday'))
-        wa = fmt_date(data.get('work_anniversary'))
-        tg = data.get('telegram') or ''
-        name = data.get('name', '')
+        first_name = name.split()[1] if len(name.split()) > 1 else name
 
         rows_added = 0
-        if bd:
-            ws.append([name, data.get('office',''), data.get('position',''), tg,
-                       f"день народження {name.split()[1] if len(name.split())>1 else name}", bd])
+        if birthday:
+            ws.append([name, office, position, telegram,
+                       f'день народження {first_name}', birthday])
             rows_added += 1
-        if wa:
-            ws.append([name, data.get('office',''), data.get('position',''), tg,
-                       'річниця роботи в ЕІ', wa])
+        if work_ann:
+            ws.append([name, office, position, telegram,
+                       'річниця роботи в ЕІ', work_ann])
+            rows_added += 1
+        if children and children.lower() not in ['немає', 'нема', 'no', '-']:
+            ws.append([name, office, position, telegram,
+                       f'день народження дітей', children])
             rows_added += 1
 
         wb.save(DATA_FILE)
 
         summary = f'✅ Додано {name}!\n\n'
-        summary += f'📅 День народження: {data.get("birthday") or "не вказано"}\n'
-        summary += f'🏆 Річниця роботи: {data.get("work_anniversary") or "не вказано"}\n'
-        summary += f'🌸 Квіти: {data.get("flowers") or "не вказано"}\n'
-        summary += f'🍰 Торт: {data.get("cake") or "не вказано"}\n'
-        summary += f'🎯 Хобі: {data.get("hobbies") or "не вказано"}\n'
-        summary += f'📱 Телеграм: {tg or "не вказано"}'
+        summary += f'📅 День народження: {birthday.strftime("%d.%m.%Y") if birthday else "не вказано"}\n'
+        summary += f'🏆 Річниця роботи: {work_ann.strftime("%d.%m.%Y") if work_ann else "не вказано"}\n'
+        summary += f'🌸 Квіти: {flowers or "не вказано"}\n'
+        summary += f'🍰 Торт: {cake or "не вказано"}\n'
+        summary += f'🎯 Хобі: {hobbies or "не вказано"}\n'
+        summary += f'📱 Телеграм: {telegram or "не вказано"}'
         await update.message.reply_text(summary)
         return
 
