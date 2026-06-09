@@ -262,6 +262,88 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f'Готово! Надіслано {count} нагадувань.')
         return
 
+    if msg_text == '/month':
+        events = load_events()
+        today = date.today()
+        found = []
+        for e in events:
+            try:
+                this_month = e['date'].replace(year=today.year)
+            except ValueError:
+                this_month = e['date'].replace(year=today.year, day=28)
+            if this_month.month == today.month:
+                days = (this_month - today).days
+                found.append((this_month, e, days))
+        found.sort(key=lambda x: x[0])
+        if found:
+            lines = [f'📅 Події у {today.strftime("%B %Y")}:\n']
+            for d, e, days in found:
+                status = '🎉 сьогодні' if days == 0 else (f'через {days} дн.' if days > 0 else f'{abs(days)} дн. тому')
+                lines.append(f"• {d.strftime('%d.%m')} — {e['reason']} — {e['name']} ({status})")
+            await update.message.reply_text('\n'.join(lines)[:4000])
+        else:
+            await update.message.reply_text('Цього місяця подій немає.')
+        return
+
+    if msg_text.startswith('/search '):
+        query = msg_text[8:].strip().lower()
+        events = load_events()
+        found = [e for e in events if query in e['name'].lower()]
+        if not found:
+            await update.message.reply_text(f'❌ Не знайдено "{query}".')
+            return
+        lines = []
+        for e in found:
+            lines.append(
+                f"👤 {e['name']}\n"
+                f"📌 {e['reason']}\n"
+                f"📅 {e['date'].strftime('%d.%m.%Y')}\n"
+                f"📱 {e['telegram'] or '—'}\n"
+            )
+        await update.message.reply_text('\n'.join(lines)[:4000])
+        return
+
+    if msg_text.startswith('/edit '):
+        parts = msg_text[6:].strip().split('\n', 1)
+        if len(parts) < 2:
+            await update.message.reply_text(
+                'Формат:\n/edit Прізвище Ім\'я\nполе: нове значення\n\n'
+                'Наприклад:\n/edit Петров Петро\nДН: 05.06.1990'
+            )
+            return
+        name_query = parts[0].strip().lower()
+        changes = parts[1].strip()
+
+        if not os.path.exists(DATA_FILE):
+            await update.message.reply_text('❌ Файл не знайдено.')
+            return
+
+        wb = openpyxl.load_workbook(DATA_FILE)
+        updated = 0
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(min_row=2):
+                if row[0].value and name_query in str(row[0].value).lower():
+                    for line in changes.split('\n'):
+                        ll = line.lower()
+                        val = re.sub(r'.*?:\s*', '', line, count=1).strip()
+                        if any(k in ll for k in ['дн:', 'народж']):
+                            dates = re.findall(r'\d{1,2}[\.\-]+\d{1,2}[\.\-]+\d{2,4}', val)
+                            if dates and len(row) > 5:
+                                row[5].value = parse_date(dates[0])
+                        elif any(k in ll for k in ['посада', 'position']) and len(row) > 2:
+                            row[2].value = val
+                        elif any(k in ll for k in ['офіс', 'office']) and len(row) > 1:
+                            row[1].value = val
+                        elif '@' in line and len(row) > 3:
+                            row[3].value = val
+                    updated += 1
+        wb.save(DATA_FILE)
+        if updated:
+            await update.message.reply_text(f'✅ Оновлено {updated} запис(ів).')
+        else:
+            await update.message.reply_text(f'❌ Не знайдено "{parts[0].strip()}".')
+        return
+
     if msg_text == '/today':
         await update.message.reply_text('Події на сьогодні і через 7 днів:')
         events = load_events()
