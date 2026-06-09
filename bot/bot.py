@@ -140,53 +140,87 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text = msg_text[4:].strip()
         if not text:
             await update.message.reply_text(
-                'Надішли інформацію про нового колегу після /add, наприклад:\n\n'
-                '/add\n'
-                'Іванова Марія Петрівна\n'
-                'Дата народження: 18.05.1986\n'
+                'Надішли інформацію після /add:\n\n'
+                '/add Іванова Марія\n'
+                'ДН: 18.05.1986\n'
+                'Річниця: 01.06.2024\n'
                 'Посада: Агент\n'
                 'Офіс: Київ\n'
-                'Річниця роботи: 01.06.2024\n'
-                'Діти: немає\n'
-                'Хобі: йога, читання\n'
+                'Хобі: йога\n'
                 'Квіти: троянди\n'
                 'Торт: медовик\n'
-                'Телеграм: @username'
+                '@username'
             )
             return
-        await update.message.reply_text('Обробляю інформацію...')
-        prompt = f"""Розбери інформацію про нового співробітника і поверни JSON з полями:
-- name (ПІБ або ім'я)
-- birthday (дата народження у форматі DD.MM.YYYY, або null)
-- work_anniversary (річниця роботи у форматі DD.MM.YYYY, або null)
-- children (інформація про дітей або null)
-- hobbies (хобі або null)
-- flowers (улюблені квіти або null)
-- cake (улюблений торт або null)
-- telegram (телеграм нікі через кому або null)
-- position (посада або null)
-- office (офіс або null)
 
-Інформація:
-{text}
+        lines = text.split('\n')
 
-Поверни ТІЛЬКИ JSON без пояснень."""
+        # Знаходимо ім'я — перший рядок або рядок без ключових слів
+        name = ''
+        birthday = None
+        work_ann = None
+        position = ''
+        office = ''
+        hobbies = ''
+        flowers = ''
+        cake = ''
+        telegram = ''
+        children = ''
 
-        result = subprocess.run(
-            ['claude', '-p', prompt, '--output-format', 'text'],
-            capture_output=True, text=True, timeout=60,
-            env={**os.environ, 'ANTHROPIC_API_KEY': ANTHROPIC_KEY}
-        )
-        import json
-        try:
-            raw = result.stdout.strip()
-            raw = re.sub(r'^```json\s*', '', raw)
-            raw = re.sub(r'^```\s*', '', raw)
-            raw = re.sub(r'\s*```$', '', raw)
-            data = json.loads(raw)
-        except:
-            await update.message.reply_text(f'❌ Не вдалось розібрати інформацію.\n{result.stdout[:500]}')
-            return
+        for line in lines:
+            l = line.strip()
+            if not l:
+                continue
+            ll = l.lower()
+
+            # Дата народження
+            if any(k in ll for k in ['дн:', 'народж', 'birthday', 'дата народження', 'д.н']):
+                dates = re.findall(r'\d{1,2}[\.\-\s]+\d{1,2}[\.\-\s]+\d{2,4}', l)
+                if dates:
+                    d_str = re.sub(r'[\s\-]+', '.', dates[0])
+                    birthday = parse_date(d_str)
+
+            # Річниця
+            elif any(k in ll for k in ['річниця', 'anniversary', 'прийнят']):
+                dates = re.findall(r'\d{1,2}[\.\-\s]+\d{1,2}[\.\-\s]+\d{2,4}', l)
+                if dates:
+                    d_str = re.sub(r'[\s\-]+', '.', dates[0])
+                    work_ann = parse_date(d_str)
+
+            # Посада
+            elif any(k in ll for k in ['посада', 'position', 'роль']):
+                position = re.sub(r'.*?:\s*', '', l, count=1).strip()
+
+            # Офіс
+            elif any(k in ll for k in ['офіс', 'office', 'місто']):
+                office = re.sub(r'.*?:\s*', '', l, count=1).strip()
+
+            # Хобі
+            elif any(k in ll for k in ['хобі', 'hobby', 'захоплен', 'інтерес']):
+                hobbies = re.sub(r'.*?:\s*', '', l, count=1).strip()
+
+            # Квіти
+            elif any(k in ll for k in ['квіт', 'flower']):
+                flowers = re.sub(r'.*?:\s*', '', l, count=1).strip()
+
+            # Торт
+            elif any(k in ll for k in ['торт', 'cake', 'десерт']):
+                cake = re.sub(r'.*?:\s*', '', l, count=1).strip()
+
+            # Діти
+            elif any(k in ll for k in ['діт', 'child', 'син', 'дочк', 'доньк']):
+                children = l
+
+            # Телеграм
+            elif '@' in l:
+                telegram = (telegram + ', ' + l).strip(', ')
+
+            # Ім'я — рядок з великої літери без спецсимволів і без дат
+            elif not name and re.match(r'^[А-ЯІЇЄA-Z][а-яіїєa-zA-Z\s\'\-]+$', l) and len(l.split()) >= 2:
+                name = l
+
+        if not name:
+            name = lines[0].strip() if lines else 'Невідомо'
 
         if not os.path.exists(DATA_FILE):
             await update.message.reply_text('❌ Файл не знайдено. Спочатку завантаж Excel.')
