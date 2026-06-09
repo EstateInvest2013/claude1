@@ -114,6 +114,28 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f'Chat ID: {chat_id}')
         return
 
+    if msg_text.startswith('/delete '):
+        name_to_delete = msg_text[8:].strip()
+        if not os.path.exists(DATA_FILE):
+            await update.message.reply_text('Файл не знайдено.')
+            return
+        wb = openpyxl.load_workbook(DATA_FILE)
+        deleted = 0
+        for sheet in wb.worksheets:
+            rows_to_delete = []
+            for row in sheet.iter_rows(min_row=2):
+                if row[0].value and name_to_delete.lower() in str(row[0].value).lower():
+                    rows_to_delete.append(row[0].row)
+            for row_num in reversed(rows_to_delete):
+                sheet.delete_rows(row_num)
+                deleted += 1
+        wb.save(DATA_FILE)
+        if deleted:
+            await update.message.reply_text(f'✅ Видалено {deleted} запис(ів) для "{name_to_delete}".')
+        else:
+            await update.message.reply_text(f'❌ Не знайдено "{name_to_delete}" у файлі.')
+        return
+
     if msg_text == '/check':
         await update.message.reply_text('Перевіряю календар...')
         count = await do_check(ctx.bot)
