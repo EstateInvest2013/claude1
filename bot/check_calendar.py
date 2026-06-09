@@ -1,11 +1,9 @@
-import subprocess, os, re
+import asyncio, os, re
 from datetime import datetime, date
 import openpyxl
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram import Bot
 
 TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '8852326670:AAEItInxXpi-Ynyoc0MvmwDVTZFJtw5o0WI')
-ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 GROUP_CHAT_ID = -1003951496246
 DATA_FILE = '/opt/tgbot/colleagues.xlsx'
 
@@ -19,7 +17,7 @@ def load_colleagues():
             if not row or not row[0]:
                 continue
             colleagues.append({
-                'name': str(row[0]).strip() if row[0] else '',
+                'name': str(row[0]).strip(),
                 'birthday': row[1] if len(row) > 1 else None,
                 'work_anniversary': row[2] if len(row) > 2 else None,
                 'children': str(row[3]).strip() if len(row) > 3 and row[3] else '',
@@ -56,36 +54,30 @@ def make_message(person, event_type, days_left):
     flowers = person.get('flowers') or '—'
     cake = person.get('cake') or '—'
     hobbies = person.get('hobbies') or '—'
-
     if event_type == 'birthday':
         emoji, title = '🎂', f'День народження — {name}'
     elif event_type == 'work':
         emoji, title = '🏆', f'Річниця роботи — {name}'
     else:
         emoji, title = '👶', f'День народження дитини — {name}'
-
     timing = '🎉 СЬОГОДНІ!' if days_left == 0 else f'⏰ Через {days_left} днів'
     return f'{emoji} {title}\n{timing}\n\n🌸 Квіти: {flowers}\n🍰 Торт: {cake}\n🎯 Хобі: {hobbies}'
 
-async def do_check(bot):
+async def main():
+    bot = Bot(token=TELEGRAM_TOKEN)
     colleagues = load_colleagues()
-    if not colleagues:
-        return 0
-    count = 0
     for p in colleagues:
         bd = parse_date(p.get('birthday'))
         if bd:
             d = days_until(bd)
             if d in [0, 7]:
                 await bot.send_message(chat_id=GROUP_CHAT_ID, text=make_message(p, 'birthday', d))
-                count += 1
 
         wa = parse_date(p.get('work_anniversary'))
         if wa:
             d = days_until(wa)
             if d in [0, 7]:
                 await bot.send_message(chat_id=GROUP_CHAT_ID, text=make_message(p, 'work', d))
-                count += 1
 
         children_raw = p.get('children', '')
         if children_raw:
@@ -95,70 +87,5 @@ async def do_check(bot):
                     d = days_until(cd)
                     if d in [0, 7]:
                         await bot.send_message(chat_id=GROUP_CHAT_ID, text=make_message(p, 'child', d))
-                        count += 1
-    return count
 
-async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
-    msg_text = update.message.text or ''
-    chat_id = update.message.chat.id
-
-    if msg_text == '/id':
-        await update.message.reply_text(f'Chat ID: {chat_id}\nТип: {update.message.chat.type}')
-        return
-
-    if msg_text == '/check':
-        await update.message.reply_text('Перевіряю календар...')
-        count = await do_check(ctx.bot)
-        await update.message.reply_text(f'Готово! Надіслано {count} нагадувань.')
-        return
-
-    if msg_text == '/list':
-        colleagues = load_colleagues()
-        if not colleagues:
-            await update.message.reply_text('Список порожній. Завантаж Excel файл.')
-            return
-        lines = ['👥 Список колег:\n']
-        for c in colleagues:
-            bd = parse_date(c.get('birthday'))
-            line = f"• {c['name']}"
-            if bd:
-                line += f" (ДН: {bd.strftime('%d.%m')})"
-            lines.append(line)
-        await update.message.reply_text('\n'.join(lines)[:4000])
-        return
-
-    if update.message.document:
-        fname = update.message.document.file_name or ''
-        if fname.endswith('.xlsx'):
-            await update.message.reply_text('Завантажую файл...')
-            file = await ctx.bot.get_file(update.message.document.file_id)
-            await file.download_to_drive(DATA_FILE)
-            colleagues = load_colleagues()
-            await update.message.reply_text(
-                f'✅ Файл збережено! Знайдено {len(colleagues)} колег.\n\n'
-                f'Команди:\n'
-                f'/check — перевірити актуальні нагадування\n'
-                f'/list — список всіх колег'
-            )
-            return
-        else:
-            await update.message.reply_text('Підтримується тільки формат .xlsx')
-            return
-
-    if msg_text and chat_id != GROUP_CHAT_ID:
-        await update.message.reply_text('Виконую...')
-        result = subprocess.run(
-            ['claude', '-p', msg_text, '--allowedTools', 'Bash,Read,Write,Edit', '--output-format', 'text'],
-            capture_output=True, text=True, timeout=120,
-            env={**os.environ, 'ANTHROPIC_API_KEY': ANTHROPIC_KEY}
-        )
-        reply = result.stdout or result.stderr or 'Немає відповіді'
-        for i in range(0, len(reply), 4000):
-            await update.message.reply_text(reply[i:i+4000])
-
-app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-app.add_handler(MessageHandler(filters.ALL, handle))
-app.run_polling()
+asyncio.run(main())
