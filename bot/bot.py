@@ -136,6 +136,100 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f'❌ Не знайдено "{name_to_delete}" у файлі.')
         return
 
+    if msg_text.startswith('/add'):
+        text = msg_text[4:].strip()
+        if not text:
+            await update.message.reply_text(
+                'Надішли інформацію про нового колегу після /add, наприклад:\n\n'
+                '/add\n'
+                'Іванова Марія Петрівна\n'
+                'Дата народження: 18.05.1986\n'
+                'Посада: Агент\n'
+                'Офіс: Київ\n'
+                'Річниця роботи: 01.06.2024\n'
+                'Діти: немає\n'
+                'Хобі: йога, читання\n'
+                'Квіти: троянди\n'
+                'Торт: медовик\n'
+                'Телеграм: @username'
+            )
+            return
+        await update.message.reply_text('Обробляю інформацію...')
+        prompt = f"""Розбери інформацію про нового співробітника і поверни JSON з полями:
+- name (ПІБ або ім'я)
+- birthday (дата народження у форматі DD.MM.YYYY, або null)
+- work_anniversary (річниця роботи у форматі DD.MM.YYYY, або null)
+- children (інформація про дітей або null)
+- hobbies (хобі або null)
+- flowers (улюблені квіти або null)
+- cake (улюблений торт або null)
+- telegram (телеграм нікі через кому або null)
+- position (посада або null)
+- office (офіс або null)
+
+Інформація:
+{text}
+
+Поверни ТІЛЬКИ JSON без пояснень."""
+
+        result = subprocess.run(
+            ['claude', '-p', prompt, '--output-format', 'text'],
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, 'ANTHROPIC_API_KEY': ANTHROPIC_KEY}
+        )
+        import json
+        try:
+            raw = result.stdout.strip()
+            raw = re.sub(r'^```json\s*', '', raw)
+            raw = re.sub(r'^```\s*', '', raw)
+            raw = re.sub(r'\s*```$', '', raw)
+            data = json.loads(raw)
+        except:
+            await update.message.reply_text(f'❌ Не вдалось розібрати інформацію.\n{result.stdout[:500]}')
+            return
+
+        if not os.path.exists(DATA_FILE):
+            await update.message.reply_text('❌ Файл не знайдено. Спочатку завантаж Excel.')
+            return
+
+        wb = openpyxl.load_workbook(DATA_FILE)
+        ws = wb.worksheets[0]
+
+        def fmt_date(d):
+            if not d:
+                return None
+            try:
+                return datetime.strptime(str(d), '%d.%m.%Y').date()
+            except:
+                return None
+
+        bd = fmt_date(data.get('birthday'))
+        wa = fmt_date(data.get('work_anniversary'))
+        tg = data.get('telegram') or ''
+        name = data.get('name', '')
+
+        rows_added = 0
+        if bd:
+            ws.append([name, data.get('office',''), data.get('position',''), tg,
+                       f"день народження {name.split()[1] if len(name.split())>1 else name}", bd])
+            rows_added += 1
+        if wa:
+            ws.append([name, data.get('office',''), data.get('position',''), tg,
+                       'річниця роботи в ЕІ', wa])
+            rows_added += 1
+
+        wb.save(DATA_FILE)
+
+        summary = f'✅ Додано {name}!\n\n'
+        summary += f'📅 День народження: {data.get("birthday") or "не вказано"}\n'
+        summary += f'🏆 Річниця роботи: {data.get("work_anniversary") or "не вказано"}\n'
+        summary += f'🌸 Квіти: {data.get("flowers") or "не вказано"}\n'
+        summary += f'🍰 Торт: {data.get("cake") or "не вказано"}\n'
+        summary += f'🎯 Хобі: {data.get("hobbies") or "не вказано"}\n'
+        summary += f'📱 Телеграм: {tg or "не вказано"}'
+        await update.message.reply_text(summary)
+        return
+
     if msg_text == '/check':
         await update.message.reply_text('Перевіряю календар...')
         count = await do_check(ctx.bot)
