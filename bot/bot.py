@@ -173,42 +173,42 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 continue
             ll = l.lower()
 
-            # Дата народження
-            if any(k in ll for k in ['дн:', 'народж', 'birthday', 'дата народження', 'д.н']):
+            # Дата народження (укр + рос)
+            if any(k in ll for k in ['дн:', 'народж', 'birthday', 'дата народження', 'д.н', 'дата рождения', 'др:']):
                 dates = re.findall(r'\d{1,2}[\.\-\s]+\d{1,2}[\.\-\s]+\d{2,4}', l)
                 if dates:
                     d_str = re.sub(r'[\s\-]+', '.', dates[0])
                     birthday = parse_date(d_str)
 
-            # Річниця
-            elif any(k in ll for k in ['річниця', 'anniversary', 'прийнят']):
+            # Річниця (укр + рос)
+            elif any(k in ll for k in ['річниця', 'anniversary', 'прийнят', 'годовщина', 'дата приема', 'принят']):
                 dates = re.findall(r'\d{1,2}[\.\-\s]+\d{1,2}[\.\-\s]+\d{2,4}', l)
                 if dates:
                     d_str = re.sub(r'[\s\-]+', '.', dates[0])
                     work_ann = parse_date(d_str)
 
-            # Посада
-            elif any(k in ll for k in ['посада', 'position', 'роль']):
+            # Посада (укр + рос)
+            elif any(k in ll for k in ['посада', 'position', 'роль', 'должность']):
                 position = re.sub(r'.*?:\s*', '', l, count=1).strip()
 
-            # Офіс
-            elif any(k in ll for k in ['офіс', 'office', 'місто']):
+            # Офіс (укр + рос)
+            elif any(k in ll for k in ['офіс', 'office', 'місто', 'офис', 'город']):
                 office = re.sub(r'.*?:\s*', '', l, count=1).strip()
 
-            # Хобі
-            elif any(k in ll for k in ['хобі', 'hobby', 'захоплен', 'інтерес']):
+            # Хобі (укр + рос)
+            elif any(k in ll for k in ['хобі', 'hobby', 'захоплен', 'інтерес', 'хобби', 'увлечен', 'интерес']):
                 hobbies = re.sub(r'.*?:\s*', '', l, count=1).strip()
 
-            # Квіти
-            elif any(k in ll for k in ['квіт', 'flower']):
+            # Квіти (укр + рос)
+            elif any(k in ll for k in ['квіт', 'flower', 'цветы', 'цветок']):
                 flowers = re.sub(r'.*?:\s*', '', l, count=1).strip()
 
-            # Торт
+            # Торт (укр + рос)
             elif any(k in ll for k in ['торт', 'cake', 'десерт']):
                 cake = re.sub(r'.*?:\s*', '', l, count=1).strip()
 
-            # Діти
-            elif any(k in ll for k in ['діт', 'child', 'син', 'дочк', 'доньк']):
+            # Діти (укр + рос)
+            elif any(k in ll for k in ['діт', 'child', 'син', 'дочк', 'доньк', 'дети', 'дочь', 'сын', 'ребен']):
                 children = l
 
             # Телеграм
