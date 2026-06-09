@@ -306,7 +306,7 @@ async def handle(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    if msg_text and chat_id != GROUP_CHAT_ID:
+    if msg_text and not msg_text.startswith('/') and chat_id != GROUP_CHAT_ID:
         await update.message.reply_text('Виконую...')
         result = subprocess.run(
             ['claude', '-p', msg_text, '--allowedTools', 'Bash,Read,Write,Edit', '--output-format', 'text'],
